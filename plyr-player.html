@@ -1,56 +1,51 @@
 <!DOCTYPE html>
-<html lang="en">
+<html>
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Plyr HLS Player</title>
+    <title>Plyr M3U8 Player</title>
     <link rel="stylesheet" href="https://cdn.plyr.io/3.7.8/plyr.css" />
+    <script src="https://cdn.jsdelivr.net/npm/hls.js@latest"></script>
+    <script src="https://cdn.plyr.io/3.7.8/plyr.js"></script>
     <style>
-        body, html {
+        /* 【关键修复代码】 */
+        html, body {
             margin: 0;
             padding: 0;
-            height: 100%;
             width: 100%;
-            overflow: hidden;
-            background-color: #000;
+            height: 100%;
+            overflow: hidden; /* 隐藏滚动条 */
+            background-color: #000; /* 背景设为黑色 */
         }
-        /* 确保播放器本身也填满可用空间 */
+        body {
+            display: flex;
+            justify-content: center; /* 水平居中 */
+            align-items: center;    /* 垂直居中 */
+        }
         #player {
-            width: 100%;
-            height: 100%;
-            /* object-fit: contain; 可以防止视频因比例问题被拉伸，根据需要可选 */
+            max-width: 100%;   /* 确保播放器不会超出容器 */
+            max-height: 100%;  /* 确保播放器不会超出容器 */
         }
     </style>
 </head>
 <body>
-    <!-- 不再需要额外的 container div -->
     <video id="player" playsinline controls></video>
 
-    <script src="https://cdn.plyr.io/3.7.8/plyr.polyfilled.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/hls.js@latest"></script>
     <script>
-        document.addEventListener('DOMContentLoaded', function() {
+        document.addEventListener('DOMContentLoaded', () => {
             const video = document.getElementById('player');
             const urlParams = new URLSearchParams(window.location.search);
-            const videoUrl = urlParams.get('m3u8') || urlParams.get('video_url');
+            const m3u8Url = urlParams.get('m3u8');
 
-            if (videoUrl && Hls.isSupported()) {
+            if (Hls.isSupported()) {
                 const hls = new Hls();
-                hls.loadSource(videoUrl);
+                hls.loadSource(m3u8Url);
                 hls.attachMedia(video);
                 window.hls = hls;
-
-                const player = new Plyr(video, {
-                    captions: { active: true, update: true, language: 'auto' }
-                });
-                window.player = player;
-            } else if (video.canPlayType('application/vnd.apple.mpegurl')) {
-                video.src = videoUrl; // For Safari and other native HLS supporters
-                const player = new Plyr(video);
-                window.player = player;
-            } else {
-                 console.error("HLS is not supported or no video URL provided.");
             }
+            window.player = new Plyr(video, {
+                // Plyr options can go here
+            });
         });
     </script>
 </body>
