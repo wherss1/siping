@@ -26,20 +26,10 @@
             height: 100%;
             max-height: 100vh;
         }
-        /* 强制显示控制栏 */
+        /* 确保控制栏始终可见 */
         .plyr--video .plyr__controls {
             opacity: 1 !important;
             pointer-events: auto !important;
-            visibility: visible !important;
-        }
-        /* 确保进度条可见 */
-        .plyr--video .plyr__progress__container {
-            opacity: 1 !important;
-            visibility: visible !important;
-        }
-        /* 增加进度条的可点击区域 */
-        .plyr--video .plyr__progress input[type=range] {
-            height: 20px !important;
         }
     </style>
 </head>
@@ -52,126 +42,42 @@
     <script src="https://cdn.plyr.io/3.7.8/plyr.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/hls.js@latest"></script>
     <script>
-        // 配置播放器
         const player = new Plyr('#player', {
             controls: [
-                'play-large',
-                'restart',
-                'rewind',
-                'play',
-                'fast-forward',
-                'progress',
-                'current-time',
-                'duration',
-                'mute',
-                'volume',
-                'settings',
-                'fullscreen'
+                'play-large', // 大播放按钮
+                'restart', // 重新开始
+                'rewind', // 快退
+                'play', // 播放/暂停
+                'fast-forward', // 快进
+                'progress', // 进度条
+                'current-time', // 当前时间
+                'duration', // 总时长
+                'mute', // 静音
+                'volume', // 音量
+                'settings', // 设置
+                'fullscreen' // 全屏
             ],
             ratio: '16:9',
-            keyboard: { focused: true, global: true },
-            seekTime: 10,
-            tooltips: { controls: true, seek: true },
-            // 确保控制栏始终显示
-            hideControls: false
+            keyboard: { focused: true, global: true }
         });
 
-        // 获取URL参数
+        // 获取URL参数中的m3u8地址
         const urlParams = new URLSearchParams(window.location.search);
         const m3u8Url = urlParams.get('m3u8');
         
         if (m3u8Url) {
             if (Hls.isSupported()) {
-                const hls = new Hls({
-                    // HLS配置
-                    maxBufferLength: 30,
-                    maxMaxBufferLength: 600,
-                    maxBufferSize: 60 * 1000 * 1000,
-                    maxBufferHole: 0.5,
-                    lowLatencyMode: true,
-                    // 特别针对爱奇艺的配置
-                    enableWorker: true,
-                    stretchShortVideoTrack: true,
-                    startLevel: -1,
-                    manifestLoadingTimeOut: 20000,
-                    manifestLoadingMaxRetry: 3,
-                    levelLoadingTimeOut: 20000,
-                    levelLoadingMaxRetry: 3
-                });
-
-                // 加载视频源
+                const hls = new Hls();
                 hls.loadSource(m3u8Url);
                 hls.attachMedia(document.querySelector('video'));
-
-                // 监听事件
                 hls.on(Hls.Events.MANIFEST_PARSED, function() {
-                    console.log('视频清单解析完成');
-                    // 确保控制栏可用
-                    player.controls = true;
+                    player.play();
                 });
-
-                hls.on(Hls.Events.ERROR, function(event, data) {
-                    console.log('HLS错误:', data);
-                    if (data.fatal) {
-                        switch (data.type) {
-                            case Hls.ErrorTypes.NETWORK_ERROR:
-                                console.log('网络错误，尝试恢复...');
-                                hls.startLoad();
-                                break;
-                            case Hls.ErrorTypes.MEDIA_ERROR:
-                                console.log('媒体错误，尝试恢复...');
-                                hls.recoverMediaError();
-                                break;
-                            default:
-                                console.log('无法恢复的错误');
-                                hls.destroy();
-                                break;
-                        }
-                    }
-                });
-
-                // 监听播放器事件
-                player.on('ready', () => {
-                    console.log('播放器就绪');
-                    // 强制显示控制栏
-                    const controls = document.querySelector('.plyr__controls');
-                    if (controls) {
-                        controls.style.visibility = 'visible';
-                        controls.style.opacity = '1';
-                    }
-                });
-
-                player.on('loadedmetadata', () => {
-                    console.log('元数据加载完成');
-                    // 再次确保控制栏可用
-                    player.controls = true;
-                });
-
-            } else if (player.media.canPlayType('application/vnd.apple.mpegurl')) {
-                // 回退到原生HLS支持
-                player.source = {
-                    type: 'video',
-                    sources: [{
-                        src: m3u8Url,
-                        type: 'application/x-mpegURL'
-                    }]
-                };
+            } else {
+                document.querySelector('source').src = m3u8Url;
+                document.querySelector('video').load();
             }
         }
-
-        // 确保控制栏始终可见的定时器
-        setInterval(() => {
-            const controls = document.querySelector('.plyr__controls');
-            if (controls) {
-                controls.style.visibility = 'visible';
-                controls.style.opacity = '1';
-            }
-            const progress = document.querySelector('.plyr__progress__container');
-            if (progress) {
-                progress.style.visibility = 'visible';
-                progress.style.opacity = '1';
-            }
-        }, 1000);
     </script>
 </body>
 </html>
