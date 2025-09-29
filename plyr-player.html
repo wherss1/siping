@@ -3,9 +3,9 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>【国内加速版】全能播放器</title>
+    <title>【国内加速稳定版】全能播放器</title>
     
-    <!-- 【重大优化】使用国内高速CDN加载Plyr样式 -->
+    <!-- 使用国内高速CDN加载Plyr样式 (字节跳动CDN) -->
     <link rel="stylesheet" href="https://cdn.bytedance.com/plyr/3.7.8/plyr.css" />
     
     <style>
@@ -34,10 +34,10 @@
         <video id="player" playsinline controls></video>
     </div>
 
-    <!-- 【重大优化】使用国内高速CDN加载HLS.js -->
-    <script src="https://cdn.bytedance.com/hls.js/1.5.8/hls.min.js"></script>
+    <!-- 【重大修复】使用国内最稳定的BootCDN加载HLS.js -->
+    <script src="https://cdn.bootcdn.net/ajax/libs/hls.js/1.5.8/hls.min.js"></script>
     
-    <!-- 【重大优化】使用国内高速CDN加载Plyr.js -->
+    <!-- 使用国内高速CDN加载Plyr.js (字节跳动CDN) -->
     <script src="https://cdn.bytedance.com/plyr/3.7.8/plyr.js"></script>
 
     <script>
@@ -49,12 +49,13 @@
             const m3u8Url = urlParams.get('m3u8');
 
             if (!m3u8Url) {
-                console.error("错误：URL中未提供m3u8地址。");
+                console.error("播放助手错误：URL中未提供m3u8地址。");
                 return;
             }
 
             if (Hls.isSupported()) {
                 const hls = new Hls({
+                    // 稳定优先的配置
                     maxBufferLength: 30,
                     maxMaxBufferLength: 600,
                     startLevel: -1,
@@ -67,19 +68,24 @@
                 hls.attachMedia(video);
 
                 hls.on(Hls.Events.MANIFEST_PARSED, (event, data) => {
+                    console.log("播放助手提示：HLS清单解析成功，准备初始化播放器UI。");
                     initializePlyr();
                 });
 
                 hls.on(Hls.Events.ERROR, (event, data) => {
+                    console.error('播放助手错误：HLS.js遇到一个错误。', data);
                     if (data.fatal) {
                         switch (data.type) {
                             case Hls.ErrorTypes.NETWORK_ERROR:
+                                console.warn("播放助手提示：网络错误，正在尝试恢复...");
                                 hls.startLoad();
                                 break;
                             case Hls.ErrorTypes.MEDIA_ERROR:
+                                console.warn("播放助手提示：媒体错误，正在尝试恢复...");
                                 hls.recoverMediaError();
                                 break;
                             default:
+                                console.error("播放助手错误：无法恢复的致命错误，销毁HLS实例。");
                                 hls.destroy();
                                 break;
                         }
@@ -92,7 +98,7 @@
                      initializePlyr();
                 });
             } else {
-                 console.error("错误：此浏览器不支持HLS播放。");
+                 console.error("播放助手错误：此浏览器不支持HLS播放。");
                  return;
             }
 
@@ -114,12 +120,12 @@
                 });
 
                 player.on('ready', () => {
+                    console.log("播放助手提示：Plyr播放器UI已就绪。");
                     player.speed = 1.0;
                     video.playbackRate = 1.0;
-                    player.play();
+                    player.play(); // 尝试自动播放
                 });
                 
-                // 确保速度同步
                 player.on('ratechange', () => {
                     if(video.playbackRate !== player.speed){
                         video.playbackRate = player.speed;
