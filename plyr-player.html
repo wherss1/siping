@@ -1,67 +1,49 @@
-
 <!DOCTYPE html>
-<html>
+<html lang="zh-CN">
 <head>
-    <meta charset="utf-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>Plyr Player (尺寸优化版)</title>
-    <link rel="stylesheet" href="https://cdn.plyr.io/3.7.8/plyr.css">
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>【国内加速版】全能播放器</title>
+    
+    <!-- 【重大优化】使用国内高速CDN加载Plyr样式 -->
+    <link rel="stylesheet" href="https://cdn.bytedance.com/plyr/3.7.8/plyr.css" />
+    
     <style>
-        /* 确保页面无边距 */
         html, body {
             margin: 0;
             padding: 0;
             width: 100%;
             height: 100%;
             overflow: hidden;
-            background: #000;
+            background-color: #000;
         }
-        
-        /* 【重大修改】让播放器容器和视频元素都100%填充父级窗口 */
-        .player-container, #player {
+        .container, #player {
             width: 100%;
             height: 100%;
         }
-
-        /* 强制显示控制栏 */
-        .plyr--video .plyr__controls {
-            opacity: 1 !important;
-            visibility: visible !important;
-            pointer-events: auto !important;
-        }
-        /* 确保进度条可见 */
+        .plyr--video .plyr__controls,
         .plyr--video .plyr__progress__container {
             opacity: 1 !important;
             visibility: visible !important;
-        }
-        /* 增加进度条的可点击区域 */
-        .plyr--video .plyr__progress input[type=range] {
-            height: 20px !important;
+            pointer-events: all !important;
         }
     </style>
 </head>
 <body>
-    <div class="player-container">
-        <video id="player" playsinline controls crossorigin>
-            <source type="application/x-mpegURL">
-        </video>
+    <div class="container">
+        <video id="player" playsinline controls></video>
     </div>
-    <script src="https://cdn.jsdelivr.net/npm/hls.js@latest"></script>
-    <script src="https://cdn.plyr.io/3.7.8/plyr.js"></script>
+
+    <!-- 【重大优化】使用国内高速CDN加载HLS.js -->
+    <script src="https://cdn.bytedance.com/hls.js/1.5.8/hls.min.js"></script>
+    
+    <!-- 【重大优化】使用国内高速CDN加载Plyr.js -->
+    <script src="https://cdn.bytedance.com/plyr/3.7.8/plyr.js"></script>
+
     <script>
-        // --- [您提供的JavaScript逻辑保持完全不变] ---
         document.addEventListener('DOMContentLoaded', () => {
             const video = document.getElementById('player');
             let player;
-
-            const playerConfig = {
-                controls: ['play-large', 'restart', 'rewind', 'play', 'fast-forward', 'progress', 'current-time', 'duration', 'mute', 'volume', 'settings', 'fullscreen'],
-                settings: ['captions', 'quality', 'speed'],
-                speed: { selected: 1, options: [0.5, 0.75, 1, 1.25, 1.5, 2] },
-                ratio: '16:9',
-                keyboard: { focused: true, global: true },
-                hideControls: false
-            };
 
             const urlParams = new URLSearchParams(window.location.search);
             const m3u8Url = urlParams.get('m3u8');
@@ -73,99 +55,78 @@
 
             if (Hls.isSupported()) {
                 const hls = new Hls({
-                    maxBufferLength: 30, maxMaxBufferLength: 600, maxBufferSize: 60 * 1000 * 1000,
-                    maxBufferHole: 0.5, lowLatencyMode: true, enableWorker: true,
-                    stretchShortVideoTrack: true, startLevel: -1, manifestLoadingTimeOut: 20000,
-                    manifestLoadingMaxRetry: 3, levelLoadingTimeOut: 20000, levelLoadingMaxRetry: 3
+                    maxBufferLength: 30,
+                    maxMaxBufferLength: 600,
+                    startLevel: -1,
+                    enableWorker: true,
+                    manifestLoadingMaxRetry: 3,
+                    levelLoadingMaxRetry: 4,
                 });
 
                 hls.loadSource(m3u8Url);
                 hls.attachMedia(video);
 
-                hls.on(Hls.Events.MANIFEST_PARSED, function() {
-                    console.log('HLS清单解析完成');
+                hls.on(Hls.Events.MANIFEST_PARSED, (event, data) => {
                     initializePlyr();
-                    video.playbackRate = 1;
-                    video.addEventListener('ratechange', function() {
-                        if (video.playbackRate !== player.speed) {
-                            video.playbackRate = player.speed;
-                        }
-                    });
                 });
 
-                hls.on(Hls.Events.ERROR, function(event, data) {
+                hls.on(Hls.Events.ERROR, (event, data) => {
                     if (data.fatal) {
                         switch (data.type) {
                             case Hls.ErrorTypes.NETWORK_ERROR:
-                                console.log('网络错误，尝试恢复...');
                                 hls.startLoad();
                                 break;
                             case Hls.ErrorTypes.MEDIA_ERROR:
-                                console.log('媒体错误，尝试恢复...');
                                 hls.recoverMediaError();
                                 break;
                             default:
-                                console.log('无法恢复的错误');
                                 hls.destroy();
                                 break;
                         }
                     }
                 });
+
             } else if (video.canPlayType('application/vnd.apple.mpegurl')) {
                 video.src = m3u8Url;
                 video.addEventListener('loadedmetadata', () => {
-                    initializePlyr();
+                     initializePlyr();
                 });
+            } else {
+                 console.error("错误：此浏览器不支持HLS播放。");
+                 return;
             }
 
             function initializePlyr() {
                 if (player) return;
-                player = new Plyr(video, playerConfig);
+
+                player = new Plyr(video, {
+                    title: '全能播放器',
+                    controls: [
+                        'play-large', 'restart', 'rewind', 'play', 'fast-forward', 
+                        'progress', 'current-time', 'duration', 'mute', 'volume', 
+                        'captions', 'settings', 'pip', 'airplay', 'fullscreen'
+                    ],
+                    settings: ['captions', 'quality', 'speed'],
+                    speed: { selected: 1, options: [0.5, 0.75, 1, 1.25, 1.5, 2] },
+                    hideControls: false,
+                    keyboard: { focused: true, global: true },
+                    tooltips: { controls: true, seek: true }
+                });
 
                 player.on('ready', () => {
-                    console.log('播放器就绪');
-                    player.speed = 1;
-                    video.playbackRate = 1;
+                    player.speed = 1.0;
+                    video.playbackRate = 1.0;
+                    player.play();
                 });
-
-                player.on('ratechange', event => {
-                    video.playbackRate = player.speed;
-                });
-
-                setInterval(() => {
-                    if (video.playbackRate !== player.speed) {
+                
+                // 确保速度同步
+                player.on('ratechange', () => {
+                    if(video.playbackRate !== player.speed){
                         video.playbackRate = player.speed;
                     }
-                }, 1000);
-
-                const controls = document.querySelector('.plyr__controls');
-                if (controls) {
-                    controls.style.visibility = 'visible';
-                    controls.style.opacity = '1';
-                }
+                });
             }
-
-            document.addEventListener('keydown', (e) => {
-                if (!player) return;
-                switch(e.key.toLowerCase()) {
-                    case ' ':
-                        if (player.paused) player.play();
-                        else player.pause();
-                        e.preventDefault();
-                        break;
-                    case 'arrowleft':
-                        player.currentTime = Math.max(player.currentTime - 10, 0);
-                        e.preventDefault();
-                        break;
-                    case 'arrowright':
-                        player.currentTime = Math.min(player.currentTime + 10, player.duration);
-                        e.preventDefault();
-                        break;
-                }
-            });
         });
     </script>
 </body>
 </html>
-
-
