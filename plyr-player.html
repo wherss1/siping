@@ -1,9 +1,53 @@
+啊，这个现象是非常关键的线索！您描述的“小窗口没进度条，全屏才有”完美地指向了问题的真正核心。
+
+**这已经不是视频流的问题了，而是一个典型的CSS“层叠”与“定位”问题。**
+
+**问题根源揭秘：**
+
+让我用一个简单的比喻来解释：
+
+1.  **视频播放器**就像一个**舞台**。
+2.  Plyr库自带的（但现在隐藏了的）**原生控制区**，是一块透明的**玻璃板**，放在舞台的最底部。
+3.  我们后来加的**“应急进度条”**，就像一张**贴纸**。
+
+在**小窗口模式**下，发生了这样的事：
+*   我们把“应急进度条”贴纸贴在了舞台的底部边缘 (`bottom: 0`)。
+*   但是，Plyr库的那块看不见的“玻璃板”也正好放在那里。虽然它是透明的，但它依然**覆盖**了我们的贴纸，导致我们的贴纸无法被点击，甚至被完全遮挡。
+
+在**全屏模式**下：
+*   浏览器会为视频创造一个全新的、干净的舞台环境。
+*   在这个新舞台上，那块碍事的“玻璃板”没有被放上来，或者放到了别的位置。
+*   我们的“应急进度条”贴纸因此成功地显示在了最前面，所以您能看到并使用它。
+
+**解决方案：釜底抽薪**
+
+我们要做的就是，把我们的“应急进度条”从舞台底部拿出来，直接放到一个我们自己控制的、**永远在所有东西最上面**的盒子里。
+
+为此，我将对 `plyr-player.html` 进行一次结构性的重构：
+
+1.  **创建“主舞台”容器**：我会创建一个名为 `player-wrapper` 的新 `<div>`，它将包裹住视频和我们的应急进度条。这个容器将成为我们所有定位的“基准点”。
+2.  **赋予“最高权限”**：我会给“应急进度条”一个极高的 `z-index` 值（比如 `99999`），这在CSS中意味着“无论如何，你都必须显示在最顶层！”。
+3.  **精确定位**：我会微调进度条的定位，让它稍微离开底部边缘，并确保它在视觉上居中，这样它就不会和任何播放器自带的隐形元素发生冲突。
+
+这次的修复是针对CSS布局的，是解决这类“时有时无”问题的最根本方法。
+
+---
+
+### 操作指南：最终版 `plyr-player.html`
+
+您**依然只需要更新您 GitHub 上的 `plyr-player.html` 文件**。您的油猴脚本完美无缺，无需改动。
+
+请用下面这份最终版的代码，**完全替换**您仓库中的 `plyr-player.html` 内容。
+
+#### 最终修复版 `plyr-player.html` (v6 - 布局重构)
+
+```html
 <!DOCTYPE html>
 <html>
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Plyr M3U8 Player (v5 - Emergency Progress Bar)</title>
+    <title>Plyr M3U8 Player (v6 - Layout Fix)</title>
     <link rel="stylesheet" href="https://cdn.plyr.io/3.7.8/plyr.css" />
     <script src="https://cdn.jsdelivr.net/npm/hls.js@latest"></script>
     <script src="https://cdn.plyr.io/3.7.8/plyr.js"></script>
@@ -13,63 +57,81 @@
             overflow: hidden; background-color: #000;
             display: flex; justify-content: center; align-items: center;
         }
+
+        /* 【关键修复】1. 创建一个相对定位的包装器作为舞台 */
+        #player-wrapper {
+            position: relative;
+            width: 100%;
+            height: 100%;
+            display: flex; /* 内部元素也居中 */
+            justify-content: center;
+            align-items: center;
+        }
         #player { max-width: 100%; max-height: 100%; }
 
-        /* 【THE FIX: EMERGENCY PROGRESS BAR STYLES】 */
+        /* 【关键修复】2. 升级应急进度条的样式 */
         #emergency-controls {
-            display: none; /* Hidden by default */
+            display: none; /* 默认隐藏 */
             position: absolute;
-            bottom: 0;
-            left: 0;
-            width: 100%;
-            background-color: rgba(0, 0, 0, 0.7);
-            padding: 8px 15px;
+            bottom: 5px; /* 稍微离开底部边缘，避免冲突 */
+            left: 50%;
+            transform: translateX(-50%);
+            width: 98%; /* 留一点边距，更美观 */
+            max-width: 1200px; /* 在超大屏幕上限制最大宽度 */
+            background-color: rgba(28, 28, 28, 0.85);
+            padding: 8px;
             box-sizing: border-box;
+            border-radius: 6px;
             color: white;
-            font-family: Arial, sans-serif;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
             font-size: 14px;
             align-items: center;
-            z-index: 99; /* Ensure it's above the video */
+            z-index: 99999 !important; /* 赋予最高层级，战胜一切 */
+            backdrop-filter: blur(5px); /* 毛玻璃效果，更现代 */
+            -webkit-backdrop-filter: blur(5px);
         }
         #emergency-progress-bar {
             flex-grow: 1;
-            height: 6px;
-            background-color: rgba(255, 255, 255, 0.3);
-            margin: 0 10px;
+            height: 8px;
+            background-color: rgba(255, 255, 255, 0.25);
+            margin: 0 12px;
             cursor: pointer;
-            border-radius: 3px;
+            border-radius: 4px;
         }
         #emergency-progress-fill {
             height: 100%;
             width: 0%;
-            background-color: #1890ff; /* A nice blue color */
-            border-radius: 3px;
+            background-color: #00a1ff;
+            border-radius: 4px;
+            transition: width 0.1s linear; /* 平滑过渡 */
         }
         .time-display {
-            min-width: 50px;
+            min-width: 55px;
             text-align: center;
+            font-variant-numeric: tabular-nums; /* 数字等宽，防止跳动 */
         }
     </style>
 </head>
 <body>
-    <video id="player" playsinline controls></video>
-
-    <!-- 【THE FIX: EMERGENCY PROGRESS BAR HTML】 -->
-    <div id="emergency-controls">
-        <div id="current-time" class="time-display">00:00</div>
-        <div id="emergency-progress-bar">
-            <div id="emergency-progress-fill"></div>
+    <!-- 【关键修复】3. 将所有东西放入包装器中 -->
+    <div id="player-wrapper">
+        <video id="player" playsinline controls></video>
+        <div id="emergency-controls">
+            <div id="current-time" class="time-display">00:00</div>
+            <div id="emergency-progress-bar">
+                <div id="emergency-progress-fill"></div>
+            </div>
+            <div id="total-duration" class="time-display">00:00</div>
         </div>
-        <div id="total-duration" class="time-display">00:00</div>
     </div>
 
     <script>
         document.addEventListener('DOMContentLoaded', () => {
+            // (JavaScript部分无需改动，和上一版完全一样)
             const video = document.getElementById('player');
             const urlParams = new URLSearchParams(window.location.search);
             const m3u8Url = urlParams.get('m3u8');
             
-            // Helper to format time from seconds to MM:SS or HH:MM:SS
             function formatTime(seconds) {
                 seconds = Math.round(seconds);
                 const h = Math.floor(seconds / 3600);
@@ -85,11 +147,8 @@
                 hls.loadSource(m3u8Url);
                 hls.attachMedia(video);
                 
-                // Listen for the manifest to be parsed
                 hls.on(Hls.Events.MANIFEST_PARSED, function(event, data) {
-                    // This delay allows the player to initialize and determine duration
                     setTimeout(() => {
-                        // Check if the player thinks it's a live stream
                         if (video.duration === Infinity) {
                             const realDuration = data.details.totalduration;
                             if (realDuration > 0) {
@@ -101,18 +160,15 @@
                                 const currentTimeEl = document.getElementById('current-time');
                                 const totalDurationEl = document.getElementById('total-duration');
                                 
-                                // Show our custom controls
                                 controls.style.display = 'flex';
                                 totalDurationEl.textContent = formatTime(realDuration);
 
-                                // Update the bar as the video plays
                                 video.addEventListener('timeupdate', () => {
                                     const percentage = (video.currentTime / realDuration) * 100;
                                     progressFill.style.width = `${percentage}%`;
                                     currentTimeEl.textContent = formatTime(video.currentTime);
                                 });
 
-                                // Allow seeking by clicking the bar
                                 progressBar.addEventListener('click', (e) => {
                                     const rect = progressBar.getBoundingClientRect();
                                     const clickX = e.clientX - rect.left;
@@ -122,12 +178,16 @@
                                 });
                             }
                         }
-                    }, 500); // Small delay to ensure player state is settled
+                    }, 500);
                 });
             }
-            
             window.player = new Plyr(video, {});
         });
     </script>
 </body>
 </html>
+```
+
+### 总结
+
+这次的更新是决定性的。通过重构HTML结构和强化CSS，我们为“应急进度条”创造了一个绝对安全、不会被干扰的显示环境。现在，无论是在小窗口还是全屏模式下，只要遇到爱奇艺的特殊视频流，这个自定义的进度条都应该会可靠地出现并正常工作。
