@@ -1,72 +1,177 @@
 <!DOCTYPE html>
 <html>
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Plyr M3U8 Player (v4 - Duration Injector)</title>
-    <link rel="stylesheet" href="https://cdn.plyr.io/3.7.8/plyr.css" />
-    <script src="https://cdn.jsdelivr.net/npm/hls.js@latest"></script>
-    <script src="https://cdn.plyr.io/3.7.8/plyr.js"></script>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Plyr Player</title>
+    <link rel="stylesheet" href="https://cdn.plyr.io/3.7.8/plyr.css">
     <style>
         html, body {
-            margin: 0; padding: 0; width: 100%; height: 100%;
-            overflow: hidden; background-color: #000;
-            display: flex; justify-content: center; align-items: center;
+            margin: 0;
+            padding: 0;
+            width: 100%;
+            height: 100%;
+            overflow: hidden;
+            background: #000;
         }
-        #player { max-width: 100%; max-height: 100%; }
+        .player-container {
+            width: 100%;
+            height: 100%;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+        video {
+            width: 100%;
+            height: 100%;
+            max-height: 100vh;
+        }
+        /* 强制显示控制栏 */
+        .plyr--video .plyr__controls {
+            opacity: 1 !important;
+            pointer-events: auto !important;
+            visibility: visible !important;
+        }
+        /* 确保进度条可见 */
+        .plyr--video .plyr__progress__container {
+            opacity: 1 !important;
+            visibility: visible !important;
+        }
+        /* 增加进度条的可点击区域 */
+        .plyr--video .plyr__progress input[type=range] {
+            height: 20px !important;
+        }
     </style>
 </head>
 <body>
-    <video id="player" playsinline controls></video>
-
+    <div class="player-container">
+        <video id="player" playsinline controls crossorigin>
+            <source type="application/x-mpegURL">
+        </video>
+    </div>
+    <script src="https://cdn.plyr.io/3.7.8/plyr.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/hls.js@latest"></script>
     <script>
-        document.addEventListener('DOMContentLoaded', () => {
-            const video = document.getElementById('player');
-            const urlParams = new URLSearchParams(window.location.search);
-            const m3u8Url = urlParams.get('m3u8');
+        // 配置播放器
+        const player = new Plyr('#player', {
+            controls: [
+                'play-large',
+                'restart',
+                'rewind',
+                'play',
+                'fast-forward',
+                'progress',
+                'current-time',
+                'duration',
+                'mute',
+                'volume',
+                'settings',
+                'fullscreen'
+            ],
+            ratio: '16:9',
+            keyboard: { focused: true, global: true },
+            seekTime: 10,
+            tooltips: { controls: true, seek: true },
+            // 确保控制栏始终显示
+            hideControls: false
+        });
 
+        // 获取URL参数
+        const urlParams = new URLSearchParams(window.location.search);
+        const m3u8Url = urlParams.get('m3u8');
+        
+        if (m3u8Url) {
             if (Hls.isSupported()) {
                 const hls = new Hls({
-                    // General hls.js optimizations
+                    // HLS配置
+                    maxBufferLength: 30,
+                    maxMaxBufferLength: 600,
+                    maxBufferSize: 60 * 1000 * 1000,
+                    maxBufferHole: 0.5,
+                    lowLatencyMode: true,
+                    // 特别针对爱奇艺的配置
                     enableWorker: true,
-                    lowLatencyMode: false
+                    stretchShortVideoTrack: true,
+                    startLevel: -1,
+                    manifestLoadingTimeOut: 20000,
+                    manifestLoadingMaxRetry: 3,
+                    levelLoadingTimeOut: 20000,
+                    levelLoadingMaxRetry: 3
                 });
-                
+
+                // 加载视频源
                 hls.loadSource(m3u8Url);
-                hls.attachMedia(video);
-                
-                // 【THE FIX: DURATION INJECTOR】
-                // This code listens for the moment the manifest is parsed.
-                hls.on(Hls.Events.MANIFEST_PARSED, function(event, data) {
-                    // Check if the player thinks this is a live stream (duration is Infinity)
-                    if (video.duration === Infinity) {
-                        // hls.js calculates the real duration from all segments. We grab it.
-                        const calculatedDuration = data.details.totalduration;
-                        
-                        // If we got a valid duration, force it onto the video element.
-                        if (calculatedDuration > 0) {
-                            console.log(`[Duration Injector] Detected live stream with calculated duration: ${calculatedDuration}s. Injecting fix.`);
-                            // We use Object.defineProperty for a robust override.
-                            Object.defineProperty(video, 'duration', {
-                                value: calculatedDuration,
-                                writable: false
-                            });
+                hls.attachMedia(document.querySelector('video'));
+
+                // 监听事件
+                hls.on(Hls.Events.MANIFEST_PARSED, function() {
+                    console.log('视频清单解析完成');
+                    // 确保控制栏可用
+                    player.controls = true;
+                });
+
+                hls.on(Hls.Events.ERROR, function(event, data) {
+                    console.log('HLS错误:', data);
+                    if (data.fatal) {
+                        switch (data.type) {
+                            case Hls.ErrorTypes.NETWORK_ERROR:
+                                console.log('网络错误，尝试恢复...');
+                                hls.startLoad();
+                                break;
+                            case Hls.ErrorTypes.MEDIA_ERROR:
+                                console.log('媒体错误，尝试恢复...');
+                                hls.recoverMediaError();
+                                break;
+                            default:
+                                console.log('无法恢复的错误');
+                                hls.destroy();
+                                break;
                         }
                     }
                 });
 
-                window.hls = hls;
+                // 监听播放器事件
+                player.on('ready', () => {
+                    console.log('播放器就绪');
+                    // 强制显示控制栏
+                    const controls = document.querySelector('.plyr__controls');
+                    if (controls) {
+                        controls.style.visibility = 'visible';
+                        controls.style.opacity = '1';
+                    }
+                });
+
+                player.on('loadedmetadata', () => {
+                    console.log('元数据加载完成');
+                    // 再次确保控制栏可用
+                    player.controls = true;
+                });
+
+            } else if (player.media.canPlayType('application/vnd.apple.mpegurl')) {
+                // 回退到原生HLS支持
+                player.source = {
+                    type: 'video',
+                    sources: [{
+                        src: m3u8Url,
+                        type: 'application/x-mpegURL'
+                    }]
+                };
             }
-            
-            window.player = new Plyr(video, {
-                // We keep the full controls list to ensure everything shows up
-                controls: [
-                    'play-large', 'play', 'progress', 'current-time', 
-                    'mute', 'volume', 'captions', 'settings', 
-                    'pip', 'airplay', 'fullscreen'
-                ]
-            });
-        });
+        }
+
+        // 确保控制栏始终可见的定时器
+        setInterval(() => {
+            const controls = document.querySelector('.plyr__controls');
+            if (controls) {
+                controls.style.visibility = 'visible';
+                controls.style.opacity = '1';
+            }
+            const progress = document.querySelector('.plyr__progress__container');
+            if (progress) {
+                progress.style.visibility = 'visible';
+                progress.style.opacity = '1';
+            }
+        }, 1000);
     </script>
 </body>
 </html>
