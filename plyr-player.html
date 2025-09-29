@@ -1,260 +1,159 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
-    <meta charset="utf-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>Custom Player</title>
-    <link rel="stylesheet" href="https://cdn.plyr.io/3.7.8/plyr.css">
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>【终极版】全能播放器</title>
+    <!-- 引入 Plyr 播放器样式 -->
+    <link rel="stylesheet" href="https://cdn.plyr.io/3.7.8/plyr.css" />
     <style>
+        /* 确保播放器铺满整个页面 */
         html, body {
             margin: 0;
             padding: 0;
             width: 100%;
             height: 100%;
             overflow: hidden;
-            background: #000;
+            background-color: #000;
         }
-        .player-container {
+        .container {
             width: 100%;
             height: 100%;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            position: relative;
         }
-        video {
-            width: 100%;
-            height: 100%;
-            max-height: 100vh;
+        /* 【关键修复】强制让Plyr的控制栏和进度条永远可见，不再自动隐藏 */
+        .plyr--video .plyr__controls {
+            opacity: 1 !important;
+            visibility: visible !important;
+            pointer-events: all !important;
         }
-        /* 修改进度条容器样式 */
-        #custom-progress-container {
-            position: fixed; /* 改为fixed */
-            bottom: 0;
-            left: 0;
-            right: 0;
-            height: 40px;
-            background: rgba(0, 0, 0, 0.7); /* 增加透明度 */
-            display: flex;
-            align-items: center;
-            padding: 0 10px;
-            z-index: 99999; /* 提高z-index */
-            pointer-events: auto; /* 确保可以点击 */
-        }
-        #custom-progress {
-            flex-grow: 1;
-            height: 8px; /* 增加默认高度 */
-            background: rgba(255, 255, 255, 0.3);
-            position: relative;
-            cursor: pointer;
-            border-radius: 4px;
-            margin: 0 10px;
-            transition: all 0.2s;
-        }
-        #progress-bar {
-            position: absolute;
-            left: 0;
-            top: 0;
-            height: 100%;
-            background: #ff0000;
-            border-radius: 4px;
-            transition: all 0.2s;
-        }
-        #time-display {
-            color: white;
-            font-size: 14px;
-            font-family: Arial, sans-serif;
-            margin-left: 10px;
-            min-width: 100px;
-            text-shadow: 1px 1px 2px rgba(0,0,0,0.5);
-        }
-        /* 进度条交互效果 */
-        #custom-progress:hover {
-            height: 12px;
-            background: rgba(255, 255, 255, 0.4);
-        }
-        #progress-bar:hover {
-            background: #ff3333;
-        }
-        /* 确保在小窗口模式下也能显示 */
-        @media (max-width: 768px) {
-            #custom-progress-container {
-                height: 30px;
-                padding: 0 5px;
-            }
-            #time-display {
-                font-size: 12px;
-                min-width: 80px;
-            }
-        }
-        /* 隐藏原始控制栏 */
-        .plyr__controls {
-            display: none !important;
-        }
-        /* 添加缓冲进度显示 */
-        #buffer-bar {
-            position: absolute;
-            left: 0;
-            top: 0;
-            height: 100%;
-            background: rgba(255, 255, 255, 0.2);
-            border-radius: 4px;
+        .plyr--video .plyr__progress__container {
+            opacity: 1 !important;
+            visibility: visible !important;
         }
     </style>
 </head>
 <body>
-    <div class="player-container">
-        <video id="player" playsinline controls crossorigin>
-            <source type="application/x-mpegURL">
-        </video>
-        <div id="custom-progress-container">
-            <div id="custom-progress">
-                <div id="buffer-bar"></div>
-                <div id="progress-bar"></div>
-            </div>
-            <div id="time-display">00:00 / 00:00</div>
-        </div>
+    <div class="container">
+        <!-- 视频播放器本体 -->
+        <video id="player" playsinline controls></video>
     </div>
-    <script src="https://cdn.plyr.io/3.7.8/plyr.js"></script>
+
+    <!-- 引入 HLS.js 库 (用于解码 m3u8) -->
     <script src="https://cdn.jsdelivr.net/npm/hls.js@latest"></script>
+    <!-- 引入 Plyr 播放器库 -->
+    <script src="https://cdn.plyr.io/3.7.8/plyr.js"></script>
+
     <script>
-        const video = document.querySelector('video');
-        const progressBar = document.getElementById('progress-bar');
-        const bufferBar = document.getElementById('buffer-bar');
-        const customProgress = document.getElementById('custom-progress');
-        const timeDisplay = document.getElementById('time-display');
-        const progressContainer = document.getElementById('custom-progress-container');
+        document.addEventListener('DOMContentLoaded', () => {
+            const video = document.getElementById('player');
+            let player;
 
-        function formatTime(seconds) {
-            if (isNaN(seconds)) return "00:00";
-            const h = Math.floor(seconds / 3600);
-            const m = Math.floor((seconds % 3600) / 60);
-            const s = Math.floor(seconds % 60);
-            if (h > 0) {
-                return `${h.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
+            // 1. 从URL获取m3u8视频地址
+            const urlParams = new URLSearchParams(window.location.search);
+            const m3u8Url = urlParams.get('m3u8');
+
+            if (!m3u8Url) {
+                console.error("错误：URL中未提供m3u8地址。");
+                return;
             }
-            return `${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
-        }
 
-        function updateProgress() {
-            if (!isNaN(video.duration)) {
-                const progress = (video.currentTime / video.duration) * 100;
-                progressBar.style.width = `${progress}%`;
-                
-                // 更新缓冲进度
-                if (video.buffered.length > 0) {
-                    const buffered = (video.buffered.end(video.buffered.length - 1) / video.duration) * 100;
-                    bufferBar.style.width = `${buffered}%`;
-                }
-                
-                timeDisplay.textContent = `${formatTime(video.currentTime)} / ${formatTime(video.duration)}`;
-            }
-        }
-
-        // 进度条点击和拖动
-        let isDragging = false;
-
-        function updateVideoTime(e) {
-            const rect = customProgress.getBoundingClientRect();
-            const pos = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
-            if (video.duration) {
-                video.currentTime = pos * video.duration;
-            }
-        }
-
-        customProgress.addEventListener('mousedown', (e) => {
-            isDragging = true;
-            updateVideoTime(e);
-        });
-
-        document.addEventListener('mousemove', (e) => {
-            if (isDragging) {
-                updateVideoTime(e);
-            }
-        });
-
-        document.addEventListener('mouseup', () => {
-            isDragging = false;
-        });
-
-        // 视频事件监听
-        video.addEventListener('timeupdate', updateProgress);
-        video.addEventListener('progress', updateProgress);
-        video.addEventListener('loadedmetadata', updateProgress);
-
-        // 配置播放器
-        const player = new Plyr('#player', {
-            controls: ['play-large', 'play', 'mute', 'volume', 'fullscreen'],
-            hideControls: false
-        });
-
-        // 获取URL参数并加载视频
-        const urlParams = new URLSearchParams(window.location.search);
-        const m3u8Url = urlParams.get('m3u8');
-        
-        if (m3u8Url) {
+            // 2. 判断浏览器支持情况，优先使用HLS.js
             if (Hls.isSupported()) {
+                console.log("HLS.js 已支持，开始加载...");
                 const hls = new Hls({
+                    // 健壮的配置，增强稳定性和容错性
                     maxBufferLength: 30,
                     maxMaxBufferLength: 600,
-                    maxBufferSize: 60 * 1000 * 1000,
-                    maxBufferHole: 0.5,
-                    lowLatencyMode: true
+                    startLevel: -1, // 自动选择最佳码率
+                    // 开启worker，提升性能
+                    enableWorker: true,
+                    // 遇到网络错误时，自动重试
+                    manifestLoadingMaxRetry: 3,
+                    levelLoadingMaxRetry: 4,
                 });
 
                 hls.loadSource(m3u8Url);
                 hls.attachMedia(video);
 
-                hls.on(Hls.Events.MANIFEST_PARSED, function() {
-                    video.play();
+                // 监听关键事件：当视频信息解析成功后，再初始化Plyr播放器
+                hls.on(Hls.Events.MANIFEST_PARSED, function (event, data) {
+                    console.log('HLS清单解析成功，视频信息已加载。');
+                    initializePlyr();
                 });
 
-                // 错误处理
-                hls.on(Hls.Events.ERROR, function(event, data) {
+                // 监听错误事件，并尝试恢复
+                hls.on(Hls.Events.ERROR, function (event, data) {
                     if (data.fatal) {
                         switch (data.type) {
                             case Hls.ErrorTypes.NETWORK_ERROR:
+                                console.error('网络错误，尝试恢复...', data);
                                 hls.startLoad();
                                 break;
                             case Hls.ErrorTypes.MEDIA_ERROR:
+                                console.error('媒体错误，尝试恢复...', data);
                                 hls.recoverMediaError();
                                 break;
                             default:
+                                console.error('无法恢复的致命错误，销毁HLS实例。', data);
                                 hls.destroy();
                                 break;
                         }
                     }
                 });
-            } else if (video.canPlayType('application/vnd.apple.mpegurl')) {
-                video.src = m3u8Url;
-            }
-        }
 
-        // 键盘控制
-        document.addEventListener('keydown', (e) => {
-            switch(e.key.toLowerCase()) {
-                case ' ':
-                    if (video.paused) video.play();
-                    else video.pause();
-                    e.preventDefault();
-                    break;
-                case 'arrowleft':
-                    video.currentTime = Math.max(video.currentTime - 10, 0);
-                    e.preventDefault();
-                    break;
-                case 'arrowright':
-                    video.currentTime = Math.min(video.currentTime + 10, video.duration);
-                    e.preventDefault();
-                    break;
+            } else if (video.canPlayType('application/vnd.apple.mpegurl')) {
+                // 备用方案：针对Safari等原生支持HLS的浏览器
+                console.log("浏览器原生支持HLS。");
+                video.src = m3u8Url;
+                video.addEventListener('loadedmetadata', () => {
+                     console.log('视频元数据已加载（原生）。');
+                     initializePlyr();
+                });
+            } else {
+                 console.error("错误：此浏览器不支持HLS播放。");
+                 return;
+            }
+
+            // 3. 初始化Plyr播放器UI的函数
+            function initializePlyr() {
+                // 如果播放器已存在，则不再重复初始化
+                if (player) return;
+
+                player = new Plyr(video, {
+                    title: '全能播放器',
+                    // 【关键】定义需要显示的全部控制按钮
+                    controls: [
+                        'play-large', // 大播放按钮
+                        'restart',    // 重新播放
+                        'rewind',     // 快退
+                        'play',       // 播放/暂停
+                        'fast-forward', // 快进
+                        'progress',   // 进度条
+                        'current-time', // 当前时间
+                        'duration',   // 总时长
+                        'mute',       // 静音
+                        'volume',     // 音量
+                        'captions',   // 字幕
+                        'settings',   // 设置（速度、画质）
+                        'pip',        // 画中画
+                        'airplay',    // AirPlay
+                        'fullscreen'  // 全屏
+                    ],
+                    // 禁用Plyr自己的自动隐藏逻辑，我们用CSS强制显示
+                    hideControls: false,
+                    // 启用快捷键
+                    keyboard: { focused: true, global: true },
+                    // 启用工具提示
+                    tooltips: { controls: true, seek: true }
+                });
+
+                // 确保视频加载后自动播放
+                player.on('ready', () => {
+                    console.log('Plyr播放器已准备就绪。');
+                    player.play();
+                });
             }
         });
-
-        // 确保进度条始终显示
-        setInterval(() => {
-            progressContainer.style.display = 'flex';
-            progressContainer.style.visibility = 'visible';
-            progressContainer.style.opacity = '1';
-        }, 1000);
     </script>
 </body>
 </html>
