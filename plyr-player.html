@@ -1,83 +1,133 @@
 <!DOCTYPE html>
 <html>
 <head>
-    <meta charset="utf-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>Plyr Player</title>
-    <link rel="stylesheet" href="https://cdn.plyr.io/3.7.8/plyr.css">
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Plyr M3U8 Player (v5 - Emergency Progress Bar)</title>
+    <link rel="stylesheet" href="https://cdn.plyr.io/3.7.8/plyr.css" />
+    <script src="https://cdn.jsdelivr.net/npm/hls.js@latest"></script>
+    <script src="https://cdn.plyr.io/3.7.8/plyr.js"></script>
     <style>
         html, body {
-            margin: 0;
-            padding: 0;
-            width: 100%;
-            height: 100%;
-            overflow: hidden;
-            background: #000;
+            margin: 0; padding: 0; width: 100%; height: 100%;
+            overflow: hidden; background-color: #000;
+            display: flex; justify-content: center; align-items: center;
         }
-        .player-container {
+        #player { max-width: 100%; max-height: 100%; }
+
+        /* 【THE FIX: EMERGENCY PROGRESS BAR STYLES】 */
+        #emergency-controls {
+            display: none; /* Hidden by default */
+            position: absolute;
+            bottom: 0;
+            left: 0;
             width: 100%;
-            height: 100%;
-            display: flex;
-            justify-content: center;
+            background-color: rgba(0, 0, 0, 0.7);
+            padding: 8px 15px;
+            box-sizing: border-box;
+            color: white;
+            font-family: Arial, sans-serif;
+            font-size: 14px;
             align-items: center;
+            z-index: 99; /* Ensure it's above the video */
         }
-        video {
-            width: 100%;
+        #emergency-progress-bar {
+            flex-grow: 1;
+            height: 6px;
+            background-color: rgba(255, 255, 255, 0.3);
+            margin: 0 10px;
+            cursor: pointer;
+            border-radius: 3px;
+        }
+        #emergency-progress-fill {
             height: 100%;
-            max-height: 100vh;
+            width: 0%;
+            background-color: #1890ff; /* A nice blue color */
+            border-radius: 3px;
         }
-        /* 确保控制栏始终可见 */
-        .plyr--video .plyr__controls {
-            opacity: 1 !important;
-            pointer-events: auto !important;
+        .time-display {
+            min-width: 50px;
+            text-align: center;
         }
     </style>
 </head>
 <body>
-    <div class="player-container">
-        <video id="player" playsinline controls crossorigin>
-            <source type="application/x-mpegURL">
-        </video>
-    </div>
-    <script src="https://cdn.plyr.io/3.7.8/plyr.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/hls.js@latest"></script>
-    <script>
-        const player = new Plyr('#player', {
-            controls: [
-                'play-large', // 大播放按钮
-                'restart', // 重新开始
-                'rewind', // 快退
-                'play', // 播放/暂停
-                'fast-forward', // 快进
-                'progress', // 进度条
-                'current-time', // 当前时间
-                'duration', // 总时长
-                'mute', // 静音
-                'volume', // 音量
-                'settings', // 设置
-                'fullscreen' // 全屏
-            ],
-            ratio: '16:9',
-            keyboard: { focused: true, global: true }
-        });
+    <video id="player" playsinline controls></video>
 
-        // 获取URL参数中的m3u8地址
-        const urlParams = new URLSearchParams(window.location.search);
-        const m3u8Url = urlParams.get('m3u8');
-        
-        if (m3u8Url) {
+    <!-- 【THE FIX: EMERGENCY PROGRESS BAR HTML】 -->
+    <div id="emergency-controls">
+        <div id="current-time" class="time-display">00:00</div>
+        <div id="emergency-progress-bar">
+            <div id="emergency-progress-fill"></div>
+        </div>
+        <div id="total-duration" class="time-display">00:00</div>
+    </div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            const video = document.getElementById('player');
+            const urlParams = new URLSearchParams(window.location.search);
+            const m3u8Url = urlParams.get('m3u8');
+            
+            // Helper to format time from seconds to MM:SS or HH:MM:SS
+            function formatTime(seconds) {
+                seconds = Math.round(seconds);
+                const h = Math.floor(seconds / 3600);
+                const m = Math.floor((seconds % 3600) / 60);
+                const s = seconds % 60;
+                const pad = num => ('0' + num).slice(-2);
+                if (h > 0) return `${h}:${pad(m)}:${pad(s)}`;
+                return `${pad(m)}:${pad(s)}`;
+            }
+
             if (Hls.isSupported()) {
                 const hls = new Hls();
                 hls.loadSource(m3u8Url);
-                hls.attachMedia(document.querySelector('video'));
-                hls.on(Hls.Events.MANIFEST_PARSED, function() {
-                    player.play();
+                hls.attachMedia(video);
+                
+                // Listen for the manifest to be parsed
+                hls.on(Hls.Events.MANIFEST_PARSED, function(event, data) {
+                    // This delay allows the player to initialize and determine duration
+                    setTimeout(() => {
+                        // Check if the player thinks it's a live stream
+                        if (video.duration === Infinity) {
+                            const realDuration = data.details.totalduration;
+                            if (realDuration > 0) {
+                                console.log(`[Emergency Bar] Live stream detected. Activating custom controls with duration: ${realDuration}s`);
+                                
+                                const controls = document.getElementById('emergency-controls');
+                                const progressBar = document.getElementById('emergency-progress-bar');
+                                const progressFill = document.getElementById('emergency-progress-fill');
+                                const currentTimeEl = document.getElementById('current-time');
+                                const totalDurationEl = document.getElementById('total-duration');
+                                
+                                // Show our custom controls
+                                controls.style.display = 'flex';
+                                totalDurationEl.textContent = formatTime(realDuration);
+
+                                // Update the bar as the video plays
+                                video.addEventListener('timeupdate', () => {
+                                    const percentage = (video.currentTime / realDuration) * 100;
+                                    progressFill.style.width = `${percentage}%`;
+                                    currentTimeEl.textContent = formatTime(video.currentTime);
+                                });
+
+                                // Allow seeking by clicking the bar
+                                progressBar.addEventListener('click', (e) => {
+                                    const rect = progressBar.getBoundingClientRect();
+                                    const clickX = e.clientX - rect.left;
+                                    const width = progressBar.clientWidth;
+                                    const seekTime = (clickX / width) * realDuration;
+                                    video.currentTime = seekTime;
+                                });
+                            }
+                        }
+                    }, 500); // Small delay to ensure player state is settled
                 });
-            } else {
-                document.querySelector('source').src = m3u8Url;
-                document.querySelector('video').load();
             }
-        }
+            
+            window.player = new Plyr(video, {});
+        });
     </script>
 </body>
 </html>
